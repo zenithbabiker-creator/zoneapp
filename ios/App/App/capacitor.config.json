@@ -1,0 +1,29 @@
+{
+	"appId": "com.zoon.agri.app",
+	"appName": "زون للخدمات الزراعية",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https",
+		"iosScheme": "https"
+	},
+	"ios": {
+		"contentInset": "always",
+		"scrollEnabled": true,
+		"backgroundColor": "#0f172a",
+		"preferredContentMode": "mobile"
+	},
+	"plugins": {
+		"CapacitorHttp": {
+			"enabled": true
+		}
+	},
+	"packageClassList": [
+		"AppPlugin",
+		"CAPCameraPlugin",
+		"FilesystemPlugin",
+		"GeolocationPlugin",
+		"CAPNetworkPlugin",
+		"PreferencesPlugin",
+		"SharePlugin"
+	]
+}
