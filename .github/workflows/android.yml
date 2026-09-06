@@ -18,9 +18,11 @@ jobs:
       MYAPP_RELEASE_KEY_PASSWORD: zone2026
 
     steps:
+      # 1. جلب الأكواد الحديثة والمستندات من المستودع
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
+      # 2. إعداد بيئة جافا (JDK 21) مع كاش Gradle
       - name: Set up Java Development Kit (JDK 21)
         uses: actions/setup-java@v4
         with:
@@ -28,21 +30,26 @@ jobs:
           distribution: 'zulu'
           cache: 'gradle'
 
+      # 3. إعداد بيئة Node.js مع كاش npm
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
 
+      # 4. تثبيت مكتبات وحزم المشروع الأساسية
       - name: Install Project Dependencies
         run: npm install --legacy-peer-deps
 
+      # 5. بناء كود الويب
       - name: Build Web Application
         run: npm run build
 
+      # 6. مزامنة ونقل كود الويب إلى أندرويد
       - name: Sync Capacitor to Android Platform
         run: npx cap sync android
 
+      # 7. استعادة والتحقق من مفتاح التوقيع الثابت والموحد
       - name: Decode and Restore Fixed Release Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -63,18 +70,19 @@ jobs:
             echo "Verified valid release-key.jks ($(wc -c < android/app/release-key.jks) bytes)."
           fi
 
+      # 8. تطبيق الإعدادات وتزييد الإصدار تلقائياً (3.x)
       - name: Enforce Compatible Configuration and Update Version
         run: |
           if ! grep -q "subprojects" android/build.gradle; then
             cat << 'EOF' >> android/build.gradle
 
-  subprojects {
-      configurations.all {
-          resolutionStrategy.force 'androidx.core:core-ktx:1.13.1'
-          resolutionStrategy.force 'androidx.core:core:1.13.1'
-      }
-  }
-  EOF
+          subprojects {
+              configurations.all {
+                  resolutionStrategy.force 'androidx.core:core-ktx:1.13.1'
+                  resolutionStrategy.force 'androidx.core:core:1.13.1'
+              }
+          }
+          EOF
           fi
 
           TARGET_VERSION_CODE="${{ github.run_number }}"
@@ -102,6 +110,7 @@ jobs:
 
           chmod +x android/gradlew
 
+      # 9. معالجة وتطبيق أيقونة التطبيق الرسمية وشاشات البداية
       - name: Process, Pad, and Deploy Main Branded Icon
         run: |
           echo "Installing ImageMagick system utilities..."
@@ -157,18 +166,22 @@ jobs:
           rm -f master_clean.png
           echo "android.crunchPngs=false" >> android/gradle.properties
 
+      # 10. تنظيف الكاش والبيئة عبر Gradle Wrapper
       - name: Clean Gradle Build Cache
         run: ./gradlew clean
         working-directory: ./android
 
+      # 11. بناء وتجميع ملف APK التجريبي
       - name: Compile and Build APK
         run: ./gradlew assembleDebug --stacktrace
         working-directory: ./android
 
+      # 12. بناء وتجميع حزمة AAB الموقعة للإنتاج
       - name: Compile and Build App Bundle (AAB)
         run: ./gradlew bundleRelease --stacktrace
         working-directory: ./android
 
+      # 13. حفظ ورفع ملف الـ APK
       - name: Archive and Upload APK
         if: always()
         uses: actions/upload-artifact@v4
@@ -177,6 +190,7 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
 
+      # 14. حفظ ورفع حزمة الـ AAB الموقعة
       - name: Archive and Upload Signed AAB
         if: always()
         uses: actions/upload-artifact@v4
