@@ -43,11 +43,11 @@ jobs:
       run: |
         npx cap sync android
 
-    # 7. استعادة مفتاح التوقيع الثابت والموحد من GitHub Secrets
+    # 7. استعادة مفتاح التوقيع الثابت والموحد من GitHub Secrets (تم التعديل لضمان تنظيف الـ Base64)
     - name: Decode and Restore Fixed Release Keystore
       run: |
         mkdir -p android/app
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release-key.jks
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\r\n\t ' | base64 -d > android/app/release-key.jks
 
     # 8. تطبيق الإعدادات وتزييد الإصدار تلقائياً (3.x)
     - name: Enforce Compatible Configuration, Update Version and Fix Source Code
