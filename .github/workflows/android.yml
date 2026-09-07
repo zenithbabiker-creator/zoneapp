@@ -49,7 +49,7 @@ jobs:
       - name: Sync Capacitor to Android Platform
         run: npx cap sync android
 
-      # 7. استعادة والتحقق من مفتاح التوقيع
+      # 7. استعادة أو توليد مفتاح التوقيع تلقائياً
       - name: Decode and Restore Fixed Release Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -110,15 +110,28 @@ jobs:
             sed -i 's/minSdkVersion .*/minSdkVersion 24/g' android/app/build.gradle
           fi
 
+      # 9. إصلاح واستعادة ملف Gradle Wrapper تلقائياً وإعطاء الصلاحيات
+      - name: Validate and Restore Gradle Wrapper
+        run: |
+          mkdir -p android/gradle/wrapper
+          WRAPPER_JAR="android/gradle/wrapper/gradle-wrapper.jar"
+          
+          # التحقق من وجود وحجم ملف الـ jar الحالي
+          if [ ! -f "$WRAPPER_JAR" ] || [ $(wc -c < "$WRAPPER_JAR") -lt 10000 ]; then
+            echo "Gradle wrapper JAR is missing or corrupted. Fetching clean wrapper..."
+            curl -sSL "https://raw.githubusercontent.com/gradle/gradle/v8.14.3/gradle/wrapper/gradle-wrapper.jar" -o "$WRAPPER_JAR" || \
+            curl -sSL "https://github.com/gradle/gradle/raw/master/gradle/wrapper/gradle-wrapper.jar" -o "$WRAPPER_JAR"
+            echo "Successfully generated clean gradle-wrapper.jar ($(wc -c < "$WRAPPER_JAR") bytes)."
+          fi
+
           chmod +x android/gradlew
 
-      # 9. معالجة وتطبيق أيقونة التطبيق (مع إصلاح فحص نوع الملف)
+      # 10. معالجة وتطبيق أيقونة التطبيق الرسمية وشاشات البداية بأمان
       - name: Process, Pad, and Deploy Main Branded Icon
         run: |
           echo "Installing ImageMagick and File system utilities..."
           sudo apt-get update && sudo apt-get install -y imagemagick file
 
-          # التأكد من صحة وجودة ملف الأيقونة
           SOURCE_ICON=""
           for img in "icon.png" "public/logo.png" "icon.jpg" "logo.jpg"; do
             if [ -f "$img" ]; then
@@ -171,22 +184,22 @@ jobs:
           rm -f master_clean.png
           echo "android.crunchPngs=false" >> android/gradle.properties
 
-      # 10. تنظيف الكاش والبيئة عبر Gradle Wrapper
+      # 11. تنظيف الكاش والبيئة عبر Gradle Wrapper
       - name: Clean Gradle Build Cache
         run: ./gradlew clean
         working-directory: ./android
 
-      # 11. بناء وتجميع ملف APK التجريبي
+      # 12. بناء وتجميع ملف APK التجريبي
       - name: Compile and Build APK
         run: ./gradlew assembleDebug --stacktrace
         working-directory: ./android
 
-      # 12. بناء وتجميع حزمة AAB الموقعة للإنتاج
+      # 13. بناء وتجميع حزمة AAB الموقعة للإنتاج
       - name: Compile and Build App Bundle (AAB)
         run: ./gradlew bundleRelease --stacktrace
         working-directory: ./android
 
-      # 13. حفظ ورفع ملف الـ APK
+      # 14. حفظ ورفع ملف الـ APK
       - name: Archive and Upload APK
         if: always()
         uses: actions/upload-artifact@v4
@@ -195,7 +208,7 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
 
-      # 14. حفظ ورفع حزمة الـ AAB الموقعة
+      # 15. حفظ ورفع حزمة الـ AAB الموقعة
       - name: Archive and Upload Signed AAB
         if: always()
         uses: actions/upload-artifact@v4
