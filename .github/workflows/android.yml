@@ -13,9 +13,9 @@ jobs:
 
     env:
       MYAPP_RELEASE_STORE_FILE: release-key.jks
-      MYAPP_RELEASE_STORE_PASSWORD: zone2026
-      MYAPP_RELEASE_KEY_ALIAS: zone-key
-      MYAPP_RELEASE_KEY_PASSWORD: zone2026
+      MYAPP_RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD || 'zone2026' }}
+      MYAPP_RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS || 'zone-key' }}
+      MYAPP_RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD || 'zone2026' }}
 
     steps:
       # 1. جلب الأكواد الحديثة والمستندات من المستودع
@@ -49,7 +49,7 @@ jobs:
       - name: Sync Capacitor to Android Platform
         run: npx cap sync android
 
-      # 7. استعادة والتحقق من مفتاح التوقيع الثابت والموحد
+      # 7. استعادة والتحقق من مفتاح التوقيع
       - name: Decode and Restore Fixed Release Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -64,13 +64,15 @@ jobs:
             echo "Keystore file is missing or 0 bytes. Generating fallback release-key.jks..."
             keytool -genkey -v -keystore android/app/release-key.jks \
               -keyalg RSA -keysize 2048 -validity 10000 \
-              -alias zone-key -storepass zone2026 -keypass zone2026 \
+              -alias "${{ env.MYAPP_RELEASE_KEY_ALIAS }}" \
+              -storepass "${{ env.MYAPP_RELEASE_STORE_PASSWORD }}" \
+              -keypass "${{ env.MYAPP_RELEASE_KEY_PASSWORD }}" \
               -dname "CN=Zone, OU=Agri, O=Kilimanjaro, L=Omdurman, S=Khartoum, C=SD"
           else
             echo "Verified valid release-key.jks ($(wc -c < android/app/release-key.jks) bytes)."
           fi
 
-      # 8. تطبيق الإعدادات وتزييد الإصدار تلقائياً (3.x)
+      # 8. تطبيق الإعدادات وتحديث رقم الإصدار تلقائياً
       - name: Enforce Compatible Configuration and Update Version
         run: |
           if ! grep -q "subprojects" android/build.gradle; then
@@ -94,11 +96,11 @@ jobs:
             echo "Updated Android Build Version to Code: $TARGET_VERSION_CODE, Name: $TARGET_VERSION_NAME"
           fi
 
-          cat << 'EOF' >> android/gradle.properties
-          RELEASE_STORE_FILE=release-key.jks
-          RELEASE_STORE_PASSWORD=zone2026
-          RELEASE_KEY_ALIAS=zone-key
-          RELEASE_KEY_PASSWORD=zone2026
+          cat << EOF >> android/gradle.properties
+          RELEASE_STORE_FILE=${{ env.MYAPP_RELEASE_STORE_FILE }}
+          RELEASE_STORE_PASSWORD=${{ env.MYAPP_RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS=${{ env.MYAPP_RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD=${{ env.MYAPP_RELEASE_KEY_PASSWORD }}
           EOF
 
           if [ -f android/variables.gradle ]; then
@@ -110,27 +112,30 @@ jobs:
 
           chmod +x android/gradlew
 
-      # 9. معالجة وتطبيق أيقونة التطبيق الرسمية وشاشات البداية
+      # 9. معالجة وتطبيق أيقونة التطبيق (مع إصلاح فحص نوع الملف)
       - name: Process, Pad, and Deploy Main Branded Icon
         run: |
-          echo "Installing ImageMagick system utilities..."
-          sudo apt-get update && sudo apt-get install -y imagemagick
+          echo "Installing ImageMagick and File system utilities..."
+          sudo apt-get update && sudo apt-get install -y imagemagick file
 
-          if [ -f "icon.png" ]; then
-            echo "Found icon.png"
-          elif [ -f "icon.jpg" ]; then
-            convert icon.jpg icon.png
-          elif [ -f "public/logo.png" ]; then
-            cp public/logo.png icon.png
-          elif [ -f "logo.jpg" ]; then
-            convert logo.jpg icon.png
+          # التأكد من صحة وجودة ملف الأيقونة
+          SOURCE_ICON=""
+          for img in "icon.png" "public/logo.png" "icon.jpg" "logo.jpg"; do
+            if [ -f "$img" ]; then
+              if file "$img" | grep -E -q 'PNG|JPEG|JPG'; then
+                SOURCE_ICON="$img"
+                echo "Found valid image source: $SOURCE_ICON"
+                break
+              fi
+            fi
+          done
+
+          if [ -n "$SOURCE_ICON" ]; then
+            convert "$SOURCE_ICON" -resize 384x384 -gravity center -background "#FFFFFF" -extent 512x512 -strip png24:master_clean.png
           else
             echo "Generating fallback default icon..."
-            convert -size 512x512 xc:"#2E7D32" -fill "#FFFFFF" -font "DejaVu-Sans-Bold" -gravity center -pointsize 180 -draw "text 0,0 'Z'" icon.png
+            convert -size 512x512 xc:"#2E7D32" -fill "#FFFFFF" -font "DejaVu-Sans-Bold" -gravity center -pointsize 180 -draw "text 0,0 'Z'" png24:master_clean.png
           fi
-
-          echo "Processing icon.png for production..."
-          convert icon.png -resize 384x384 -gravity center -background "#FFFFFF" -extent 512x512 -strip png24:master_clean.png
 
           deploy_icon_dimension() {
             local folder_name="$1"
