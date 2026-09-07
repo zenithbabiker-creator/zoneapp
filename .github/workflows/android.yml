@@ -110,20 +110,18 @@ jobs:
             sed -i 's/minSdkVersion .*/minSdkVersion 24/g' android/app/build.gradle
           fi
 
-      # 9. تحميل واستخراج ملف Gradle Wrapper السليم والرسمي تلقائياً
-      - name: Validate and Restore Gradle Wrapper
+      # 9. توليد وتحديث Gradle Wrapper رسمياً وتثبيت الملفات الصحيحة
+      - name: Validate and Regenerate Gradle Wrapper
         run: |
           mkdir -p android/gradle/wrapper
           WRAPPER_JAR="android/gradle/wrapper/gradle-wrapper.jar"
           
-          # فحص إذا كان ملف الـ jar مفقوداً أو تالفاً (أقل من 50 كيلو بايت)
           if [ ! -f "$WRAPPER_JAR" ] || [ $(wc -c < "$WRAPPER_JAR") -lt 50000 ]; then
-            echo "Gradle wrapper JAR is missing or corrupted. Downloading official distribution..."
-            curl -sSL "https://services.gradle.org/distributions/gradle-8.14.3-bin.zip" -o gradle-dist.zip
-            unzip -q gradle-dist.zip
-            cp gradle-8.14.3/lib/plugins/gradle-wrapper-*.jar "$WRAPPER_JAR" 2>/dev/null || cp gradle-8.14.3/lib/gradle-wrapper-*.jar "$WRAPPER_JAR" 2>/dev/null || find gradle-8.14.3 -name "gradle-wrapper-*.jar" -exec cp {} "$WRAPPER_JAR" \;
-            rm -rf gradle-dist.zip gradle-8.14.3
-            echo "Successfully deployed clean gradle-wrapper.jar ($(wc -c < "$WRAPPER_JAR") bytes)."
+            echo "Gradle wrapper JAR is missing or invalid. Regenerating using system Gradle..."
+            cd android
+            gradle wrapper --gradle-version 8.14.3
+            cd ..
+            echo "Successfully regenerated gradle-wrapper.jar ($(wc -c < "$WRAPPER_JAR") bytes)."
           fi
 
           chmod +x android/gradlew
